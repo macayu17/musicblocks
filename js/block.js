@@ -213,6 +213,56 @@ const PIEMENUS = [
     "wrapmode"
 ];
 
+const getCanvasMetrics = canvas => {
+    const fallbackLeft = canvas && Number.isFinite(canvas.offsetLeft) ? canvas.offsetLeft : 0;
+    const fallbackTop = canvas && Number.isFinite(canvas.offsetTop) ? canvas.offsetTop : 0;
+    const fallbackWidth =
+        canvas && Number.isFinite(canvas.width) && canvas.width > 0 ? canvas.width : 1;
+    const fallbackHeight =
+        canvas && Number.isFinite(canvas.height) && canvas.height > 0 ? canvas.height : 1;
+
+    const rect =
+        canvas && typeof canvas.getBoundingClientRect === "function"
+            ? canvas.getBoundingClientRect()
+            : null;
+    const width = rect && rect.width > 0 ? rect.width : fallbackWidth;
+    const height = rect && rect.height > 0 ? rect.height : fallbackHeight;
+
+    return {
+        left: rect ? rect.left : fallbackLeft,
+        top: rect ? rect.top : fallbackTop,
+        width,
+        height,
+        scaleX: width / fallbackWidth,
+        scaleY: height / fallbackHeight
+    };
+};
+
+const getBlockOverlayPosition = block => {
+    const activity = block.activity || block.blocks.activity;
+    const canvasMetrics = getCanvasMetrics(activity.canvas);
+    const blocksContainer = activity.blocksContainer || { x: 0, y: 0 };
+    const stageScale = typeof activity.getStageScale === "function" ? activity.getStageScale() : 1;
+    const blockScale = block.blocks && block.blocks.blockScale ? block.blocks.blockScale : 1;
+    const x = block.container ? block.container.x : 0;
+    const y = block.container ? block.container.y : 0;
+
+    return {
+        left: Math.round(
+            ((x + blocksContainer.x) * stageScale + 28 * blockScale) * canvasMetrics.scaleX +
+                canvasMetrics.left
+        ),
+        top: Math.round(
+            ((y + blocksContainer.y) * stageScale + 6 * blockScale) * canvasMetrics.scaleY +
+                canvasMetrics.top
+        ),
+        canvasWidth: canvasMetrics.width,
+        canvasHeight: canvasMetrics.height,
+        scaleX: canvasMetrics.scaleX,
+        scaleY: canvasMetrics.scaleY
+    };
+};
+
 /**
  * Async function to create bitmap from SVG data.
  * @param {string} data - SVG data.
@@ -3758,9 +3808,6 @@ class Block {
         const x = this.container.x;
         const y = this.container.y;
 
-        const canvasLeft = this.activity.canvas.offsetLeft + 28 * this.blocks.blockScale;
-        const canvasTop = this.activity.canvas.offsetTop + 6 * this.blocks.blockScale;
-
         const selectorWidth = 150;
 
         let movedStage = false;
@@ -4483,22 +4530,24 @@ class Block {
             });
 
             // Use GPU acceleration (transform) instead of left/top to avoid layout thrashing
-            const left = Math.round(
-                (x + this.activity.blocksContainer.x) * this.activity.getStageScale() + canvasLeft
-            );
-            const top = Math.round(
-                (y + this.activity.blocksContainer.y) * this.activity.getStageScale() + canvasTop
-            );
+            const overlayPosition = getBlockOverlayPosition(this);
+            const left = overlayPosition.left;
+            const top = overlayPosition.top;
+            const labelScale = Math.min(overlayPosition.scaleX, overlayPosition.scaleY);
 
             this.label.style.transform = `translate3d(${left}px, ${top}px, 0)`;
             this.label.style.left = "0px";
             this.label.style.top = "0px";
             this.label.style.width =
-                Math.round((selectorWidth * this.blocks.blockScale * this.protoblock.scale) / 2) +
-                "px";
+                Math.round(
+                    ((selectorWidth * this.blocks.blockScale * this.protoblock.scale) / 2) *
+                        overlayPosition.scaleX
+                ) + "px";
 
             this.label.style.fontSize =
-                Math.round((20 * this.blocks.blockScale * this.protoblock.scale) / 2) + "px";
+                Math.round(
+                    ((20 * this.blocks.blockScale * this.protoblock.scale) / 2) * labelScale
+                ) + "px";
             this.label.style.display = "";
             this.label.focus();
             if (this.labelattr !== null) {
@@ -4914,5 +4963,6 @@ document.addEventListener(
 );
 
 if (typeof module !== "undefined" && module.exports) {
+    Block.getBlockOverlayPosition = getBlockOverlayPosition;
     module.exports = Block;
 }

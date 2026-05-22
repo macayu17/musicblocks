@@ -100,6 +100,59 @@ const getPieMenuSize = block => {
     return Math.min(canvas.width, canvas.height);
 };
 
+const getCanvasMetrics = canvas => {
+    const fallbackLeft = canvas && Number.isFinite(canvas.offsetLeft) ? canvas.offsetLeft : 0;
+    const fallbackTop = canvas && Number.isFinite(canvas.offsetTop) ? canvas.offsetTop : 0;
+    const fallbackWidth =
+        canvas && Number.isFinite(canvas.width) && canvas.width > 0 ? canvas.width : 1;
+    const fallbackHeight =
+        canvas && Number.isFinite(canvas.height) && canvas.height > 0 ? canvas.height : 1;
+
+    const rect =
+        canvas && typeof canvas.getBoundingClientRect === "function"
+            ? canvas.getBoundingClientRect()
+            : null;
+    const width = rect && rect.width > 0 ? rect.width : fallbackWidth;
+    const height = rect && rect.height > 0 ? rect.height : fallbackHeight;
+
+    return {
+        left: rect ? rect.left : fallbackLeft,
+        top: rect ? rect.top : fallbackTop,
+        width,
+        height,
+        scaleX: width / fallbackWidth,
+        scaleY: height / fallbackHeight
+    };
+};
+
+const getBlockOverlayPosition = block => {
+    const activity = block.activity;
+    const canvasMetrics = getCanvasMetrics(activity.canvas);
+    const blocksContainer = activity.blocksContainer || { x: 0, y: 0 };
+    const stageScale = typeof activity.getStageScale === "function" ? activity.getStageScale() : 1;
+    const blockScale = block.blocks && block.blocks.blockScale ? block.blocks.blockScale : 1;
+    const x = block.container ? block.container.x : 0;
+    const y = block.container ? block.container.y : 0;
+
+    return {
+        left: Math.round(
+            ((x + blocksContainer.x) * stageScale + 28 * blockScale) * canvasMetrics.scaleX +
+                canvasMetrics.left
+        ),
+        top: Math.round(
+            ((y + blocksContainer.y) * stageScale + 6 * blockScale) * canvasMetrics.scaleY +
+                canvasMetrics.top
+        ),
+        canvasWidth: canvasMetrics.width,
+        canvasHeight: canvasMetrics.height,
+        scaleX: canvasMetrics.scaleX,
+        scaleY: canvasMetrics.scaleY
+    };
+};
+
+const clampOverlayCoordinate = (coordinate, maxCoordinate) =>
+    Math.min(Math.max(0, maxCoordinate), Math.max(0, coordinate));
+
 // Debounce resize handler for performance
 let wheelResizeTimeout;
 let wheelResizeListenerAttached = false;
@@ -396,37 +449,21 @@ const piemenuPitches = (block, noteLabels, noteValues, accidentals, note, accide
     }
 
     // Position the widget over the note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     const displaySize = 400;
     setWheelSize(displaySize);
     const halfWheelSize = displaySize / 2;
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - displaySize,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - halfWheelSize
-            )
+        clampOverlayCoordinate(
+            overlayPosition.left - halfWheelSize,
+            overlayPosition.canvasWidth - displaySize
         ) + "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - displaySize,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - halfWheelSize
-            )
+        clampOverlayCoordinate(
+            overlayPosition.top - halfWheelSize,
+            overlayPosition.canvasHeight - displaySize
         ) + "px";
 
     // Navigate to a the current note value.
@@ -1105,36 +1142,16 @@ const piemenuCustomNotes = (block, noteLabels, customLabels, selectedCustom, sel
     const that = block;
 
     // position widget
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(400);
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - 400,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.left - 200, overlayPosition.canvasWidth - 400) +
+        "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - 450,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.top - 200, overlayPosition.canvasHeight - 450) +
+        "px";
 
     if (hasOctaveWheel) {
         // Use the octave associated with block block, if available.
@@ -1377,30 +1394,23 @@ const piemenuNthModalPitch = (block, noteValues, note) => {
     block.label.addEventListener("keypress", block._exitKeyPressed.bind(block));
 
     // Position the widget above/below note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(300);
     const halfWheelSize = wheelSize / 2;
 
     const selectorWidth = 150;
-    const left = Math.round(
-        (x + block.activity.blocksContainer.x) * block.activity.getStageScale() + canvasLeft
-    );
-    const top = Math.round(
-        (y + block.activity.blocksContainer.y) * block.activity.getStageScale() + canvasTop
-    );
+    const left = overlayPosition.left;
+    const top = overlayPosition.top;
+    const labelScale = Math.min(overlayPosition.scaleX, overlayPosition.scaleY);
     block.label.style.left = left + "px";
     block.label.style.top = top + "px";
 
     docById("wheelDiv").style.left =
-        Math.min(
-            Math.max(left - (300 - selectorWidth) / 2, 0),
-            block.blocks.turtles._canvas.width - 300
+        clampOverlayCoordinate(
+            left - (300 - selectorWidth) / 2,
+            overlayPosition.canvasWidth - 300
         ) + "px";
 
     if (top - 300 < 0) {
@@ -1410,10 +1420,12 @@ const piemenuNthModalPitch = (block, noteValues, note) => {
     }
 
     block.label.style.width =
-        (Math.round(selectorWidth * block.blocks.blockScale) * block.protoblock.scale) / 2 + "px";
+        ((Math.round(selectorWidth * block.blocks.blockScale) * block.protoblock.scale) / 2) *
+            overlayPosition.scaleX +
+        "px";
 
     block.label.style.fontSize =
-        Math.round((20 * block.blocks.blockScale * block.protoblock.scale) / 2) + "px";
+        Math.round((20 * block.blocks.blockScale * block.protoblock.scale * labelScale) / 2) + "px";
 
     // Navigate to a the current note value.
     const i = noteValues.indexOf(note);
@@ -1628,36 +1640,16 @@ const piemenuAccidentals = (block, accidentalLabels, accidentalValues, accidenta
     };
 
     // Position the widget over the note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(300);
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - 300,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.left - 200, overlayPosition.canvasWidth - 300) +
+        "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - 350,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.top - 200, overlayPosition.canvasHeight - 350) +
+        "px";
 
     // Navigate to a the current accidental value.
     let i = accidentalValues.indexOf(accidental);
@@ -1832,29 +1824,22 @@ const piemenuNoteValue = (block, noteValue) => {
     });
 
     // Position the widget over the note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(300);
     const halfWheelSize = wheelSize / 2;
     const selectorWidth = 150;
-    const left = Math.round(
-        (x + block.activity.blocksContainer.x) * block.activity.getStageScale() + canvasLeft
-    );
-    const top = Math.round(
-        (y + block.activity.blocksContainer.y) * block.activity.getStageScale() + canvasTop
-    );
+    const left = overlayPosition.left;
+    const top = overlayPosition.top;
+    const labelScale = Math.min(overlayPosition.scaleX, overlayPosition.scaleY);
     block.label.style.left = left + "px";
     block.label.style.top = top + "px";
 
     docById("wheelDiv").style.left =
-        Math.min(
-            Math.max(left - (halfWheelSize - selectorWidth / 2), 0),
-            block.blocks.turtles._canvas.width - wheelSize
+        clampOverlayCoordinate(
+            left - (halfWheelSize - selectorWidth / 2),
+            overlayPosition.canvasWidth - wheelSize
         ) + "px";
     if (top - wheelSize < 0) {
         docById("wheelDiv").style.top = top + 40 + "px";
@@ -1863,7 +1848,9 @@ const piemenuNoteValue = (block, noteValue) => {
     }
 
     block.label.style.width =
-        (Math.round(selectorWidth * block.blocks.blockScale) * block.protoblock.scale) / 2 + "px";
+        ((Math.round(selectorWidth * block.blocks.blockScale) * block.protoblock.scale) / 2) *
+            overlayPosition.scaleX +
+        "px";
 
     const __showHide = () => {
         // const i = that._noteValueWheel.selectedNavItemIndex;
@@ -1912,7 +1899,7 @@ const piemenuNoteValue = (block, noteValue) => {
     }
 
     block.label.style.fontSize =
-        Math.round((20 * block.blocks.blockScale * block.protoblock.scale) / 2) + "px";
+        Math.round((20 * block.blocks.blockScale * block.protoblock.scale * labelScale) / 2) + "px";
     block.label.style.display = "";
     block.label.focus();
 
@@ -2072,29 +2059,22 @@ const piemenuNumber = (block, wheelValues, selectedValue) => {
     });
 
     // Position the widget over the note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(300);
 
     const selectorWidth = 150;
-    const left = Math.round(
-        (x + block.activity.blocksContainer.x) * block.activity.getStageScale() + canvasLeft
-    );
-    const top = Math.round(
-        (y + block.activity.blocksContainer.y) * block.activity.getStageScale() + canvasTop
-    );
+    const left = overlayPosition.left;
+    const top = overlayPosition.top;
+    const labelScale = Math.min(overlayPosition.scaleX, overlayPosition.scaleY);
     block.label.style.left = left + "px";
     block.label.style.top = top + "px";
 
     docById("wheelDiv").style.left =
-        Math.min(
-            Math.max(left - (300 - selectorWidth) / 2, 0),
-            block.blocks.turtles._canvas.width - 300
+        clampOverlayCoordinate(
+            left - (300 - selectorWidth) / 2,
+            overlayPosition.canvasWidth - 300
         ) + "px";
     if (top - 300 < 0) {
         docById("wheelDiv").style.top = top + 40 + "px";
@@ -2103,7 +2083,9 @@ const piemenuNumber = (block, wheelValues, selectedValue) => {
     }
 
     block.label.style.width =
-        (Math.round(selectorWidth * block.blocks.blockScale) * block.protoblock.scale) / 2 + "px";
+        ((Math.round(selectorWidth * block.blocks.blockScale) * block.protoblock.scale) / 2) *
+            overlayPosition.scaleX +
+        "px";
     // Navigate to a the current number value.
     let i = wheelValues.indexOf(selectedValue);
     if (i === -1 || selectedValue < 1 || selectedValue > 8) {
@@ -2119,7 +2101,7 @@ const piemenuNumber = (block, wheelValues, selectedValue) => {
         block._numberWheel.navigateWheel(i);
     }
     block.label.style.fontSize =
-        Math.round((20 * block.blocks.blockScale * block.protoblock.scale) / 2) + "px";
+        Math.round((20 * block.blocks.blockScale * block.protoblock.scale * labelScale) / 2) + "px";
 
     block.label.style.display = "";
     block.label.focus();
@@ -2400,29 +2382,22 @@ const piemenuColor = (block, wheelValues, selectedValue, mode) => {
     });
 
     // Position the widget over the note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(300);
 
     const selectorWidth = 150;
-    const left = Math.round(
-        (x + block.activity.blocksContainer.x) * block.activity.getStageScale() + canvasLeft
-    );
-    const top = Math.round(
-        (y + block.activity.blocksContainer.y) * block.activity.getStageScale() + canvasTop
-    );
+    const left = overlayPosition.left;
+    const top = overlayPosition.top;
+    const labelScale = Math.min(overlayPosition.scaleX, overlayPosition.scaleY);
     block.label.style.left = left + "px";
     block.label.style.top = top + "px";
 
     docById("wheelDiv").style.left =
-        Math.min(
-            Math.max(left - (300 - selectorWidth) / 2, 0),
-            block.blocks.turtles._canvas.width - 300
+        clampOverlayCoordinate(
+            left - (300 - selectorWidth) / 2,
+            overlayPosition.canvasWidth - 300
         ) + "px";
     if (top - 300 < 0) {
         docById("wheelDiv").style.top = top + 40 + "px";
@@ -2431,7 +2406,9 @@ const piemenuColor = (block, wheelValues, selectedValue, mode) => {
     }
 
     block.label.style.width =
-        (Math.round(selectorWidth * block.blocks.blockScale) * block.protoblock.scale) / 2 + "px";
+        ((Math.round(selectorWidth * block.blocks.blockScale) * block.protoblock.scale) / 2) *
+            overlayPosition.scaleX +
+        "px";
 
     // Navigate to a the current number value.
     let i = wheelValues.indexOf(selectedValue);
@@ -2443,7 +2420,7 @@ const piemenuColor = (block, wheelValues, selectedValue, mode) => {
     // docById('wheelDiv').style.display = '';
 
     block.label.style.fontSize =
-        Math.round((20 * block.blocks.blockScale * block.protoblock.scale) / 2) + "px";
+        Math.round((20 * block.blocks.blockScale * block.protoblock.scale * labelScale) / 2) + "px";
     block.label.style.display = "";
     block.label.focus();
 
@@ -2562,36 +2539,16 @@ const piemenuBasic = (block, menuLabels, menuValues, selectedValue, colors) => {
     };
 
     // Position the widget over the note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(300);
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - 300,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.left - 200, overlayPosition.canvasWidth - 300) +
+        "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - 350,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.top - 200, overlayPosition.canvasHeight - 350) +
+        "px";
 
     // Navigate to a the current selectedValue value.
     let i = menuValues.indexOf(selectedValue);
@@ -2676,36 +2633,16 @@ const piemenuBoolean = (block, booleanLabels, booleanValues, boolean) => {
     };
 
     // Position the widget over the note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(300);
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - 300,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.left - 200, overlayPosition.canvasWidth - 300) +
+        "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - 350,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.top - 200, overlayPosition.canvasHeight - 350) +
+        "px";
 
     // Navigate to a the current boolean value.
     let i = booleanValues.indexOf(boolean);
@@ -2811,36 +2748,16 @@ const piemenuChords = (block, selectedChord) => {
     };
 
     // Position the widget over the note block.
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(400);
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - 300,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.left - 200, overlayPosition.canvasWidth - 300) +
+        "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - 350,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.top - 200, overlayPosition.canvasHeight - 350) +
+        "px";
 
     // Navigate to a the current chord value.
     let i = chordLabels.indexOf(selectedChord);
@@ -3002,36 +2919,16 @@ const piemenuVoices = (block, voiceLabels, voiceValues, categories, voice, rotat
     };
 
     // position widget
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(400);
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - 400,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.left - 200, overlayPosition.canvasWidth - 400) +
+        "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - 450,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.top - 200, overlayPosition.canvasHeight - 450) +
+        "px";
 
     // navigate to a specific starting point
     let i = voiceValues.indexOf(voice);
@@ -3148,36 +3045,16 @@ const piemenuIntervals = (block, selectedInterval) => {
     const that = block;
 
     // position widget
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(400);
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - 400,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.left - 200, overlayPosition.canvasWidth - 400) +
+        "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - 450,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.top - 200, overlayPosition.canvasHeight - 450) +
+        "px";
 
     // Add function to each main menu for show/hide sub menus
     // TODO: Add all tabs to each interval
@@ -3642,38 +3519,18 @@ const piemenuModes = (block, selectedMode) => {
     };
 
     // position widget
-    const x = block.container.x;
-    const y = block.container.y;
-
-    const canvasLeft = block.activity.canvas.offsetLeft + 28 * block.blocks.blockScale;
-    const canvasTop = block.activity.canvas.offsetTop + 6 * block.blocks.blockScale;
+    const overlayPosition = getBlockOverlayPosition(block);
 
     docById("wheelDiv").style.position = "absolute";
     setWheelSize(600);
 
     // Block widget is large. Be sure it fits on the screen.
     docById("wheelDiv").style.left =
-        Math.min(
-            block.blocks.turtles._canvas.width - 600,
-            Math.max(
-                0,
-                Math.round(
-                    (x + block.activity.blocksContainer.x) * block.activity.getStageScale() +
-                        canvasLeft
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.left - 200, overlayPosition.canvasWidth - 600) +
+        "px";
     docById("wheelDiv").style.top =
-        Math.min(
-            block.blocks.turtles._canvas.height - 650,
-            Math.max(
-                0,
-                Math.round(
-                    (y + block.activity.blocksContainer.y) * block.activity.getStageScale() +
-                        canvasTop
-                ) - 200
-            )
-        ) + "px";
+        clampOverlayCoordinate(overlayPosition.top - 200, overlayPosition.canvasHeight - 650) +
+        "px";
 
     for (let i = 0; i < 12; i++) {
         that._modeWheel.navItems[i].navigateFunction = __playNote;
@@ -4530,5 +4387,5 @@ const piemenuDissectNumber = widget => {
 };
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { piemenuPitches };
+    module.exports = { getBlockOverlayPosition, piemenuPitches };
 }

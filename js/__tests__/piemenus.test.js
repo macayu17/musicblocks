@@ -12,7 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const { piemenuPitches } = require("../piemenus");
+const { getBlockOverlayPosition, piemenuPitches } = require("../piemenus");
 
 const piemenusPath = path.join(__dirname, "..", "piemenus.js");
 let piemenusContent;
@@ -148,6 +148,35 @@ describe("piemenus behavioral tests", () => {
         expect(mockBlock._pitchWheel).toBeDefined();
         expect(mockBlock._accidentalsWheel).toBeDefined();
         expect(mockBlock._exitWheel).toBeDefined();
+    });
+
+    test("block overlay coordinates are scaled to the canvas CSS box", () => {
+        mockBlock.container.x = 100;
+        mockBlock.container.y = 80;
+        mockBlock.activity.blocksContainer.x = 20;
+        mockBlock.activity.blocksContainer.y = -10;
+        mockBlock.activity.getStageScale.mockReturnValue(2);
+        mockBlock.activity.canvas = {
+            width: 1200,
+            height: 800,
+            offsetLeft: 0,
+            offsetTop: 0,
+            getBoundingClientRect: jest.fn(() => ({
+                left: 10,
+                top: 20,
+                width: 600,
+                height: 400
+            }))
+        };
+
+        const position = getBlockOverlayPosition(mockBlock);
+
+        expect(position.left).toBe(144);
+        expect(position.top).toBe(93);
+        expect(position.canvasWidth).toBe(600);
+        expect(position.canvasHeight).toBe(400);
+        expect(position.scaleX).toBe(0.5);
+        expect(position.scaleY).toBe(0.5);
     });
 
     test("pitch wrapping logic generic application (7 notes)", async () => {

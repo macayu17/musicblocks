@@ -148,6 +148,40 @@ describe("Block Foundation", () => {
             expect(block.getInfo()).toBe("forward block");
         });
 
+        it("scales DOM label coordinates to the canvas CSS box", () => {
+            const block = new Block(mockProtoBlock, mockBlocks);
+            block.container = new global.createjs.Container();
+            block.container.x = 100;
+            block.container.y = 80;
+            block.blocks.blockScale = 1;
+            block.blocks.activity = {
+                canvas: {
+                    width: 1200,
+                    height: 800,
+                    offsetLeft: 0,
+                    offsetTop: 0,
+                    getBoundingClientRect: jest.fn(() => ({
+                        left: 10,
+                        top: 20,
+                        width: 600,
+                        height: 400
+                    }))
+                },
+                blocksContainer: { x: 20, y: -10 },
+                getStageScale: jest.fn(() => 2)
+            };
+            block.activity = block.blocks.activity;
+
+            const position = Block.getBlockOverlayPosition(block);
+
+            expect(position.left).toBe(144);
+            expect(position.top).toBe(93);
+            expect(position.canvasWidth).toBe(600);
+            expect(position.canvasHeight).toBe(400);
+            expect(position.scaleX).toBe(0.5);
+            expect(position.scaleY).toBe(0.5);
+        });
+
         it("isCollapsible() should return true for collapsible blocks", () => {
             mockProtoBlock.name = "start";
             const block = new Block(mockProtoBlock, mockBlocks);
