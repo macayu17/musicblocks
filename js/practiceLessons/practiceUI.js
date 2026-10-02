@@ -99,7 +99,7 @@ const PracticeUI = {
       <div class="practice-panel-frame">
         <div class="practice-menu-header ${headerClass || ""}">
           <h3>${title}</h3>
-          <button id="${closeButtonId}">X</button>
+          <button id="${closeButtonId}" aria-label="${id === "practice-panel" ? _("Close Practice") : _("Close Explorer Journal")}">X</button>
         </div>
         <div id="${contentId}"></div>
       </div>

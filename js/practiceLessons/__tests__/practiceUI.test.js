@@ -1021,6 +1021,9 @@ describe("PracticeUI panel lifecycle", () => {
         const panel = document.getElementById("practice-panel");
         expect(panel).not.toBeNull();
         expect(panel.querySelectorAll(".level-btn")).toHaveLength(3);
+        expect(panel.querySelector("#close-practice").getAttribute("aria-label")).toBe(
+            "Close Practice"
+        );
     });
 
     test("opening a second time reuses the panel already on screen", async () => {
@@ -1091,6 +1094,9 @@ describe("ExplorerJournalUI panel lifecycle", () => {
         const panel = document.getElementById("explorer-journal-panel");
         expect(panel).not.toBeNull();
         expect(panel.textContent).toContain("My Explorer Book");
+        expect(panel.querySelector("#close-explorer-journal").getAttribute("aria-label")).toBe(
+            "Close Explorer Journal"
+        );
     });
 
     test("opening a second time reuses the panel already on screen", async () => {
